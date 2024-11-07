@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { FaInstagram, FaDownload, FaInfoCircle } from 'react-icons/fa';
-import JSZip from 'jszip';
 
 const MediaDownload = () => {
     const [url, setUrl] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const downloadMedia = async (mediaUrl, fileType, fileName) => {
+    const downloadMedia = async (mediaUrl, fileType) => {
         try {
             const response = await fetch(mediaUrl);
             if (!response.ok) throw new Error('Media download failed');
@@ -19,13 +18,9 @@ const MediaDownload = () => {
             const link = document.createElement('a');
             link.href = blobUrl;
             
-            link.download = fileName || `media.${fileType}`;
-            
-            // Trigger download
+            link.download = `instagram_media.${fileType}`;
             document.body.appendChild(link);
             link.click();
-            
-            // Cleanup
             document.body.removeChild(link);
             window.URL.revokeObjectURL(blobUrl);
             
@@ -35,59 +30,6 @@ const MediaDownload = () => {
             return false;
         }
     };
-
-    const downloadZip = async (mediaUrls) => {
-        try {
-            const zip = new JSZip();
-            for (let i = 0; i < mediaUrls.length; i++) {
-                const { url, type } = mediaUrls[i];
-                const fileName = `media_${i + 1}.${type}`;
-    
-                console.log('Downloading from URL:', url);
-    
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch media from ${url}, Status: ${response.status}`);
-                    }
-                    const blob = await response.blob();
-    
-                    // Check if the blob is valid
-                    if (blob.size === 0) {
-                        console.error(`Empty blob received for ${url}`);
-                        continue;
-                    }
-    
-                    zip.file(fileName, blob);
-                    console.log(`Added file ${fileName} to ZIP`);
-                } catch (error) {
-                    console.error(`Error downloading file from ${url}:`, error);
-                }
-            }
-    
-            if (zip.files.length === 0) {
-                console.error('No files added to the ZIP');
-                return false;
-            }
-    
-            const content = await zip.generateAsync({ type: 'blob' });
-            const blobUrl = window.URL.createObjectURL(content);
-    
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = 'instagram_media.zip';
-    
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(blobUrl);
-    
-            return true;
-        } catch (error) {
-            console.error('ZIP download error:', error);
-            return false;
-        }
-    };     
 
     const handleDownload = async () => {
         if (!url) {
@@ -119,13 +61,21 @@ const MediaDownload = () => {
             const data = await res.json();
             console.log('API Response:', data);
 
-            // Check if it's a single media URL or multiple
-            if (data.mediaUrls && data.mediaUrls.length > 1) {
-                // Download multiple images as a ZIP file
-                await downloadZip(data.mediaUrls);
+            if (data.zipFilePath) {
+                const zipResponse = await fetch(data.zipFilePath);
+                const zipBlob = await zipResponse.blob();
+    
+                const blobUrl = window.URL.createObjectURL(zipBlob);
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = 'instagram_media.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+
             } else if (data.fileUrl) {
-                const fileName = `instagram_media.${data.fileType}`;
-                const success = await downloadMedia(data.fileUrl, data.fileType, fileName);
+                const success = await downloadMedia(data.fileUrl, data.fileType);
                 if (!success) {
                     throw new Error('Failed to download media');
                 }
