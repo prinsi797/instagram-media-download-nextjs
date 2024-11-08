@@ -102,7 +102,6 @@ const MediaDownload = () => {
                     url: data.zipFilePath
                 });
             } else if (data.fileUrl) {
-                // चेक करें कि फाइल टाइप mp4 है या नहीं
                 const isVideo = data.fileType === 'mp4' || data.fileUrl.includes('.mp4');
                 setPreview({
                     type: isVideo ? 'video' : 'image',
@@ -202,7 +201,7 @@ const MediaDownload = () => {
                             {/* Preview section */}
                             {preview && (
                                 <div className="preview-section mt-4 text-center">
-                                    <h5 className="mb-3">Media Preview</h5>
+                                    {/* <h5 className="mb-3">Media Preview</h5> */}
                                     <div className="preview-container mb-3">
                                         {preview.type === 'video' ? (
                                             <div className="video-preview">
