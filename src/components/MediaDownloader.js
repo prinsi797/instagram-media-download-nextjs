@@ -13,17 +13,20 @@ const MediaDownload = () => {
         try {
             console.log('Attempting to download from:', mediaUrl);
 
-            const response = await fetch(mediaUrl, {
-                method: 'GET',
-                headers: {
-                    'Accept': '*/*',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Referer': 'https://www.instagram.com/',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                },
-                mode: 'cors', // CORS मोड जोड़ें
-                credentials: 'omit' // क्रेडेंशियल्स को omit करें
-            });
+            // const response = await fetch(mediaUrl, {
+            //     method: 'GET',
+            //     headers: {
+            //         'Accept': '*/*',
+            //         'Accept-Language': 'en-US,en;q=0.5',
+            //         'Referer': 'https://www.instagram.com/',
+            //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            //     },
+            //     mode: 'cors',
+            //     credentials: 'omit'
+            // });
+            const proxyUrl = `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(mediaUrl)}`;
+        
+            const response = await fetch(proxyUrl);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -70,11 +73,12 @@ const MediaDownload = () => {
 
         setIsLoading(true);
         setError('');
-        setPreview(null); // Reset preview when starting new download
+        setPreview(null);
 
         try {
             let cleanUrl = url.split('?')[0];
             const postMatch = cleanUrl.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)\/?/);
+            console.log(postMatch);
 
             if (!postMatch || !postMatch[2]) {
                 throw new Error('Invalid Instagram URL format');
@@ -103,10 +107,14 @@ const MediaDownload = () => {
                 });
             } else if (data.fileUrl) {
                 const isVideo = data.fileType === 'mp4' || data.fileUrl.includes('.mp4');
+                // प्रॉक्सी URL बनाएं
+                const proxyUrl = `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(data.fileUrl)}`;
+                
                 setPreview({
                     type: isVideo ? 'video' : 'image',
-                    url: data.fileUrl,
-                    fileType: data.fileType
+                    url: proxyUrl,  // यहाँ प्रॉक्सी URL का उपयोग करें
+                    fileType: data.fileType,
+                    originalUrl: data.fileUrl // मूल URL को भी स्टोर करें
                 });
             }
 
@@ -142,7 +150,7 @@ const MediaDownload = () => {
                                 preview.type === 'image' ? 'jpg' : 
                                 preview.fileType;
             
-            await downloadMedia(preview.url, fileExtension);
+                                await downloadMedia(preview.originalUrl || preview.url, fileExtension);
                 // await downloadMedia(preview.url, preview.type);
             }
         } catch (err) {
