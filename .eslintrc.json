@@ -1,3 +1,6 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@next/next/no-img-element": "off" // <img> टैग के उपयोग की चेतावनी को बंद करें
+  }
 }

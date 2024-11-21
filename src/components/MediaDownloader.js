@@ -1,31 +1,86 @@
 import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { FaInstagram, FaDownload, FaInfoCircle } from 'react-icons/fa';
+import { FaInstagram, FaYoutube, FaDownload, FaInfoCircle } from 'react-icons/fa';
+// import Image from 'next/image';
 
 const MediaDownload = () => {
     const [url, setUrl] = useState('');
+    const [platform, setPlatform] = useState('instagram');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [preview, setPreview] = useState(null);
 
+    const handleDownload = async () => {
+        if (!url) {
+            setError('Please add a URL');
+            return;
+        }
+
+        setIsLoading(true);
+        setError('');
+        setPreview(null);
+
+        try {
+            // let cleanUrl = url.split('?')[0];
+            const res = await fetch('https://mediasave.kryzetech.com/api/instagram.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ postUrl: url }),
+            });
+
+            const data = await res.json();
+            console.log('API Response:', data);
+
+            if (!res.ok || data.error) {
+                throw new Error(data.error || 'Failed to fetch media info');
+            }
+
+            if (data.platform === 'instagram') {
+                if (data.type === 'carousel') {
+                    setPreview({
+                        platform: 'instagram',
+                        type: 'carousel',
+                        url: data.zipFilePath
+                    });
+                } else {
+                    const proxyUrl = `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(data.fileUrl)}`;
+                    setPreview({
+                        platform: 'instagram',
+                        type: data.type,
+                        url: proxyUrl,
+                        fileType: data.fileType,
+                        originalUrl: data.fileUrl,
+                        thumbnail: data.fileUrl
+                    });
+                }
+            } else if (data.platform === 'youtube') {
+                const uniqueDownloadLinks = Array.from(new Set(data.data.downloadLinks.items.map(item => item.quality)))
+                    .map(quality => {
+                        return data.data.downloadLinks.items.find(item => item.quality === quality);
+                    });
+                setPreview({
+                    platform: 'youtube',
+                    type: 'video',
+                    title: data.data.title,
+                    thumbnail: data.data.thumbnail || '',
+                    duration: data.data.duration,
+                    downloadLinks: uniqueDownloadLinks || [],
+                    url: uniqueDownloadLinks[0]?.url || '',
+                });
+            }
+        } catch (err) {
+            console.error('Error details:', err);
+            setError(err.message || 'Download failed');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const downloadMedia = async (mediaUrl, fileType) => {
         try {
-            console.log('Attempting to download from:', mediaUrl);
-
-            // const response = await fetch(mediaUrl, {
-            //     method: 'GET',
-            //     headers: {
-            //         'Accept': '*/*',
-            //         'Accept-Language': 'en-US,en;q=0.5',
-            //         'Referer': 'https://www.instagram.com/',
-            //         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            //     },
-            //     mode: 'cors',
-            //     credentials: 'omit'
-            // });
             const proxyUrl = `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(mediaUrl)}`;
-        
             const response = await fetch(proxyUrl);
 
             if (!response.ok) {
@@ -33,26 +88,18 @@ const MediaDownload = () => {
             }
 
             const blob = await response.blob();
-            console.log('Blob size:', blob.size);
-
             if (blob.size === 0) {
                 throw new Error('Downloaded file is empty');
             }
 
-            // Create a timestamp for unique filename
             const timestamp = new Date().getTime();
             const extension = fileType.toLowerCase().replace('video', 'mp4').replace('image', 'jpg');
-            const fileName = `instagram_${timestamp}.${extension}`;
-    
-            // const fileName = `instagram_${timestamp}.${fileType}`;
+            const fileName = `${platform}_${timestamp}.${extension}`;
 
-            // Create download link
             const blobUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = blobUrl;
             link.download = fileName;
-
-            // Trigger download
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -65,77 +112,16 @@ const MediaDownload = () => {
         }
     };
 
-    const handleDownload = async () => {
-        if (!url) {
-            setError('Please add Instagram URL');
-            return;
-        }
-
-        setIsLoading(true);
-        setError('');
-        setPreview(null);
-
-        try {
-            let cleanUrl = url.split('?')[0];
-            const postMatch = cleanUrl.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)\/?/);
-            console.log(postMatch);
-
-            if (!postMatch || !postMatch[2]) {
-                throw new Error('Invalid Instagram URL format');
-            }
-
-            const res = await fetch('https://mediasave.kryzetech.com/api/instagram.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ postUrl: cleanUrl }),
-            });
-
-            const data = await res.json();
-            console.log('API Response:', data);
-
-            if (!res.ok || data.error) {
-                throw new Error(data.error || 'Failed to fetch media info');
-            }
-
-            // Set preview data
-            if (data.zipFilePath) {
-                setPreview({
-                    type: 'carousel',
-                    url: data.zipFilePath
-                });
-            } else if (data.fileUrl) {
-                const isVideo = data.fileType === 'mp4' || data.fileUrl.includes('.mp4');
-                // प्रॉक्सी URL बनाएं
-                const proxyUrl = `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(data.fileUrl)}`;
-                
-                setPreview({
-                    type: isVideo ? 'video' : 'image',
-                    url: proxyUrl,  // यहाँ प्रॉक्सी URL का उपयोग करें
-                    fileType: data.fileType,
-                    originalUrl: data.fileUrl // मूल URL को भी स्टोर करें
-                });
-            }
-
-        } catch (err) {
-            console.error('Error details:', err);
-            setError(err.message || 'Download failed');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handlePreviewDownload = async () => {
         if (!preview) return;
-
         try {
-            if (preview.type === 'carousel') {
+            if (preview.platform === 'youtube') {
+                await downloadMedia(preview.url, preview.fileType);
+            } else if (preview.type === 'carousel') {
                 const zipResponse = await fetch(preview.url);
                 if (!zipResponse.ok) {
                     throw new Error('ZIP download failed');
                 }
-
                 const zipBlob = await zipResponse.blob();
                 const blobUrl = window.URL.createObjectURL(zipBlob);
                 const link = document.createElement('a');
@@ -146,12 +132,7 @@ const MediaDownload = () => {
                 document.body.removeChild(link);
                 window.URL.revokeObjectURL(blobUrl);
             } else {
-                const fileExtension = preview.type === 'video' ? 'mp4' : 
-                                preview.type === 'image' ? 'jpg' : 
-                                preview.fileType;
-            
-                                await downloadMedia(preview.originalUrl || preview.url, fileExtension);
-                // await downloadMedia(preview.url, preview.type);
+                await downloadMedia(preview.originalUrl || preview.url, preview.fileType);
             }
         } catch (err) {
             setError('Download failed: ' + err.message);
@@ -159,21 +140,51 @@ const MediaDownload = () => {
     };
 
     return (
-        <div className="container-fluid min-vh-100 bg-light py-5">
-            <div className="row justify-content-center">
+        <div className="container-fluid min-vh-100 bg-light py-2">
+            {/* Navbar */}
+            <nav className="navbar navbar-expand-lg navbar-dark" style={{ backgroundColor: '#000' }}>
+                <div className="container-fluid">
+                    <a className="navbar-brand" href="#">
+                    <img src="/logo/medialogo.jpg" alt="Logo" style={{ width: '40px', marginRight: '10px' }} />
+                    </a>
+                    <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                        <span className="navbar-toggler-icon"></span>
+                    </button>
+                    <div className="collapse navbar-collapse" id="navbarNav">
+                        <ul className="navbar-nav">
+                            <li className="nav-item">
+                                <a className={`nav-link ${platform === 'instagram' ? 'active' : ''}`} onClick={() => setPlatform('instagram')} href="#">Instagram</a>
+                            </li>
+                            <li className="nav-item">
+                                <a className={`nav-link ${platform === 'youtube' ? 'active' : ''}`} onClick={() => setPlatform('youtube')} href="#">YouTube</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+
+            <div className="row justify-content-center mt-3">
                 <div className="col-md-8 col-lg-6">
                     <div className="card shadow-lg border-0 rounded-lg">
                         <div className="card-body p-5">
-                            {/* Existing header section */}
+                            {/* Platform specific content */}
                             <div className="text-center mb-4">
-                                <FaInstagram className="text-primary mb-3" style={{ fontSize: '3rem' }} />
-                                <h1 className="h3 mb-3">Instagram Media Downloader</h1>
-                                <p className="text-muted">
-                                    Download photos and videos from Instagram
-                                </p>
+                                {platform === 'instagram' ? (
+                                    <div>
+                                        <FaInstagram className="text-primary mb-3" style={{ fontSize: '3rem' }} />
+                                        <h2 className="h4 mb-3">Instagram Downloader</h2>
+                                        <p className="text-muted">Download photos, videos, and reels from Instagram</p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <FaYoutube className="text-danger mb-3" style={{ fontSize: '3rem' }} />
+                                        <h2 className="h4 mb-3">YouTube Downloader</h2>
+                                        <p className="text-muted">Download shorts and videos from YouTube</p>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* URL input section */}
+                            {/* URL Input Section */}
                             <div className="mb-4">
                                 <div className="input-group">
                                     <input
@@ -181,11 +192,11 @@ const MediaDownload = () => {
                                         className="form-control form-control-lg"
                                         value={url}
                                         onChange={(e) => setUrl(e.target.value)}
-                                        placeholder="Paste Instagram URL here..."
+                                        placeholder={`Paste ${platform} URL here...`}
                                         disabled={isLoading}
                                     />
                                     <button
-                                        className="btn btn-primary btn-lg"
+                                        className={`btn btn-lg ${platform === 'instagram' ? 'btn-primary' : 'btn-danger'}`}
                                         onClick={handleDownload}
                                         disabled={isLoading}
                                     >
@@ -206,49 +217,91 @@ const MediaDownload = () => {
                                 )}
                             </div>
 
-                            {/* Preview section */}
+                            {/* Preview Section */}
                             {preview && (
                                 <div className="preview-section mt-4 text-center">
-                                    {/* <h5 className="mb-3">Media Preview</h5> */}
                                     <div className="preview-container mb-3">
                                         {preview.type === 'video' ? (
                                             <div className="video-preview">
-                                                <video
-                                                    controls
-                                                    className="img-fluid rounded"
-                                                    style={{ maxHeight: '400px', width: '100%' }}
-                                                    preload="metadata"
-                                                >
-                                                    <source src={preview.url} type="video/mp4" />
-                                                    Your browser does not support the video tag.
-                                                </video>
+                                                {preview.platform === 'youtube' && preview.thumbnail ? (
+                                                    <img
+                                                        src={preview.thumbnail}
+                                                        alt="Video thumbnail"
+                                                        className="img-fluid rounded"
+                                                        style={{ maxHeight: '400px', width: '100%', objectFit: 'cover' }}
+                                                        width={400}
+                                                        height={225}
+                                                    />
+                                                ) : (
+                                                    <video
+                                                        controls
+                                                        className="img-fluid rounded"
+                                                        style={{ maxHeight: '400px', width: '100%' }}
+                                                        preload="metadata"
+                                                    >
+                                                        <source src={preview.url} type="video/mp4" />
+                                                        Your browser does not support the video tag.
+                                                    </video>
+                                                )}
                                             </div>
                                         ) : preview.type === 'carousel' ? (
                                             <div className="carousel-preview p-3 bg-light rounded">
                                                 <FaInstagram className="text-primary" style={{ fontSize: '3rem' }} />
                                                 <p className="mt-2 mb-0">Multiple media files</p>
                                             </div>
-                                        ) : (
+                                        ) : preview.type === 'image' ? (
                                             <img
-                                                src={preview.url}
+                                                src={preview.originalUrl}
                                                 alt="Preview"
                                                 className="img-fluid rounded"
-                                                style={{ maxHeight: '400px' }}
+                                                style={{ maxHeight: '400px', width: '100%', objectFit: 'cover' }}
+                                                width={400}
+                                                height={300}
                                             />
-                                        )}
+                                        ) : null}
                                     </div>
-                                    <div className="mt-3">
-                                        {/* <p className="text-muted mb-2">
-                                            Type: {preview.type.charAt(0).toUpperCase() + preview.type.slice(1)}
-                                        </p> */}
-                                        <button
-                                            className="btn btn-success btn-lg"
-                                            onClick={handlePreviewDownload}
-                                        >
-                                            <FaDownload className="me-2" />
-                                            Download {preview.type === 'carousel' ? 'All Media' : 'Media'}
-                                        </button>
-                                    </div>
+
+                                    {/* यूट्यूब के लिए टेबल */}
+                                    {platform === 'youtube' && preview && (
+                                        <div className="mt-4">
+                                            <h3 className="h5">Video Quality Options</h3>
+                                            <table className="table table-bordered">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Quality</th>
+                                                        <th>Download</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {preview.downloadLinks.map((item, index) => (
+                                                        <tr key={index}>
+                                                            <td>{item.quality}</td>
+                                                            <td>
+                                                                <button
+                                                                    className="btn btn-sm btn-primary"
+                                                                    onClick={() => downloadMedia(item.url, item.mimeType)}
+                                                                >
+                                                                    Download
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+
+                                    {platform === 'instagram' && (
+                                        <div className="mt-3">
+                                            <button
+                                                className={`btn btn-lg ${platform === 'instagram' ? 'btn-primary' : 'btn-danger'}`}
+                                                onClick={handlePreviewDownload}
+                                            >
+                                                <FaDownload className="me-2" />
+                                                Download {preview.type === 'carousel' ? 'All Media' : 'Media'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -257,7 +310,7 @@ const MediaDownload = () => {
                                 <div className="card-body">
                                     <h5 className="card-title">How to use:</h5>
                                     <ol className="mb-0">
-                                        <li className="mb-2">Copy the URL of any Instagram post/reel</li>
+                                        <li className="mb-2">Copy the {platform} {platform === 'instagram' ? 'post/reel' : 'video/shorts'} URL</li>
                                         <li className="mb-2">Paste the URL above</li>
                                         <li className="mb-2">Click Preview to see the media</li>
                                         <li>Click Download to save the media</li>
@@ -271,5 +324,4 @@ const MediaDownload = () => {
         </div>
     );
 };
-
 export default MediaDownload;
