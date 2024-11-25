@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { FaInstagram, FaYoutube, FaDownload, FaInfoCircle } from 'react-icons/fa';
-// import Image from 'next/image';
+import { FaInstagram, FaYoutube, FaDownload, FaInfoCircle, FaSnapchat } from 'react-icons/fa';
 
 const MediaDownload = () => {
     const [url, setUrl] = useState('');
@@ -9,6 +8,7 @@ const MediaDownload = () => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [preview, setPreview] = useState(null);
+    const [downloadingIndex, setDownloadingIndex] = useState(null);
 
     const handleDownload = async () => {
         if (!url) {
@@ -21,7 +21,6 @@ const MediaDownload = () => {
         setPreview(null);
 
         try {
-            // let cleanUrl = url.split('?')[0];
             const res = await fetch('https://mediasave.kryzetech.com/api/instagram.php', {
                 method: 'POST',
                 headers: {
@@ -69,6 +68,20 @@ const MediaDownload = () => {
                     downloadLinks: uniqueDownloadLinks || [],
                     url: uniqueDownloadLinks[0]?.url || '',
                 });
+            } else if (data.platform === 'snapchat') {
+                if (data.success && data.data) {
+                    setPreview({
+                        platform: 'snapchat',
+                        type: 'video',
+                        title: data.data.title || 'Snapchat Video',
+                        thumbnail: data.data.thumbnail,
+                        url: data.data.videoDownloadUrl,
+                        originalUrl: data.data.videoDownloadUrl,
+                        fileType: 'video'
+                    });
+                } else {
+                    throw new Error('Invalid Snapchat response format');
+                }
             }
         } catch (err) {
             console.error('Error details:', err);
@@ -78,10 +91,17 @@ const MediaDownload = () => {
         }
     };
 
-    const downloadMedia = async (mediaUrl, fileType) => {
+    const downloadMedia = async (mediaUrl, fileType, index = null) => {
         try {
-            const proxyUrl = `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(mediaUrl)}`;
-            const response = await fetch(proxyUrl);
+            setDownloadingIndex(index);
+            setIsLoading(true);
+
+            // const proxyUrl = `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(mediaUrl)}`;
+            const finalUrl = platform === 'snapchat' ? mediaUrl :
+                `https://mediasave.kryzetech.com/api/instagram.php?proxy_url=${encodeURIComponent(mediaUrl)}`;
+
+            const response = await fetch(finalUrl);
+            // const response = await fetch(proxyUrl);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -109,6 +129,9 @@ const MediaDownload = () => {
         } catch (error) {
             console.error('Download error:', error);
             throw new Error(`Download failed: ${error.message}`);
+        } finally {
+            setDownloadingIndex(null);
+            setIsLoading(false);
         }
     };
 
@@ -116,7 +139,12 @@ const MediaDownload = () => {
         if (!preview) return;
         try {
             if (preview.platform === 'youtube') {
-                await downloadMedia(preview.url, preview.fileType);
+                const videoUrl = preview.downloadLinks[0]?.url;
+                if (videoUrl) {
+                    window.open(videoUrl, '_blank');
+                } else {
+                    throw new Error('No download URL found');
+                }
             } else if (preview.type === 'carousel') {
                 const zipResponse = await fetch(preview.url);
                 if (!zipResponse.ok) {
@@ -139,15 +167,40 @@ const MediaDownload = () => {
         }
     };
 
+    const getPlatformColor = () => {
+        switch (platform) {
+            case 'instagram':
+                return 'btn-primary';
+            case 'youtube':
+                return 'btn-danger';
+            case 'snapchat':
+                return 'btn-warning';
+            default:
+                return 'btn-primary';
+        }
+    };
+
+    const getPlatformIcon = () => {
+        switch (platform) {
+            case 'instagram':
+                return <FaInstagram className="text-primary mb-3" style={{ fontSize: '3rem' }} />;
+            case 'youtube':
+                return <FaYoutube className="text-danger mb-3" style={{ fontSize: '3rem' }} />;
+            case 'snapchat':
+                return <FaSnapchat className="text-warning mb-3" style={{ fontSize: '3rem' }} />;
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="container-fluid min-vh-100 bg-light py-2">
-            {/* Navbar */}
             <nav className="navbar navbar-expand-lg navbar-dark" style={{ backgroundColor: '#000' }}>
                 <div className="container-fluid">
                     <a className="navbar-brand" href="#">
-                    <img src="/logo/medialogo.jpg" alt="Logo" style={{ width: '40px', marginRight: '10px' }} />
+                        <img src="/logo/medialogo.jpg" alt="Logo" style={{ width: '40px', marginRight: '10px' }} />
                     </a>
-                    <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                         <span className="navbar-toggler-icon"></span>
                     </button>
                     <div className="collapse navbar-collapse" id="navbarNav">
@@ -158,6 +211,9 @@ const MediaDownload = () => {
                             <li className="nav-item">
                                 <a className={`nav-link ${platform === 'youtube' ? 'active' : ''}`} onClick={() => setPlatform('youtube')} href="#">YouTube</a>
                             </li>
+                            <li className="nav-item">
+                                <a className={`nav-link ${platform === 'snapchat' ? 'active' : ''}`} onClick={() => setPlatform('snapchat')} href="#">Snapchat</a>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -167,24 +223,18 @@ const MediaDownload = () => {
                 <div className="col-md-8 col-lg-6">
                     <div className="card shadow-lg border-0 rounded-lg">
                         <div className="card-body p-5">
-                            {/* Platform specific content */}
                             <div className="text-center mb-4">
-                                {platform === 'instagram' ? (
-                                    <div>
-                                        <FaInstagram className="text-primary mb-3" style={{ fontSize: '3rem' }} />
-                                        <h2 className="h4 mb-3">Instagram Downloader</h2>
-                                        <p className="text-muted">Download photos, videos, and reels from Instagram</p>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <FaYoutube className="text-danger mb-3" style={{ fontSize: '3rem' }} />
-                                        <h2 className="h4 mb-3">YouTube Downloader</h2>
-                                        <p className="text-muted">Download shorts and videos from YouTube</p>
-                                    </div>
-                                )}
+                                {getPlatformIcon()}
+                                <h2 className="h4 mb-3">{platform.charAt(0).toUpperCase() + platform.slice(1)} Downloader</h2>
+                                <p className="text-muted">
+                                    {platform === 'snapchat'
+                                        ? 'Download stories and snaps from Snapchat'
+                                        : platform === 'instagram'
+                                            ? 'Download photos, videos, and reels from Instagram'
+                                            : 'Download shorts and videos from YouTube'}
+                                </p>
                             </div>
 
-                            {/* URL Input Section */}
                             <div className="mb-4">
                                 <div className="input-group">
                                     <input
@@ -196,7 +246,7 @@ const MediaDownload = () => {
                                         disabled={isLoading}
                                     />
                                     <button
-                                        className={`btn btn-lg ${platform === 'instagram' ? 'btn-primary' : 'btn-danger'}`}
+                                        className={`btn btn-lg ${getPlatformColor()}`}
                                         onClick={handleDownload}
                                         disabled={isLoading}
                                     >
@@ -217,51 +267,48 @@ const MediaDownload = () => {
                                 )}
                             </div>
 
-                            {/* Preview Section */}
                             {preview && (
                                 <div className="preview-section mt-4 text-center">
                                     <div className="preview-container mb-3">
-                                        {preview.type === 'video' ? (
+                                        {preview.type === 'video' && (
                                             <div className="video-preview">
-                                                {preview.platform === 'youtube' && preview.thumbnail ? (
-                                                    <img
-                                                        src={preview.thumbnail}
-                                                        alt="Video thumbnail"
-                                                        className="img-fluid rounded"
-                                                        style={{ maxHeight: '400px', width: '100%', objectFit: 'cover' }}
-                                                        width={400}
-                                                        height={225}
-                                                    />
-                                                ) : (
-                                                    <video
-                                                        controls
-                                                        className="img-fluid rounded"
-                                                        style={{ maxHeight: '400px', width: '100%' }}
-                                                        preload="metadata"
-                                                    >
-                                                        <source src={preview.url} type="video/mp4" />
-                                                        Your browser does not support the video tag.
-                                                    </video>
+                                                <video
+                                                    controls
+                                                    className="img-fluid rounded"
+                                                    style={{ maxHeight: '400px', width: '100%' }}
+                                                    preload="metadata"
+                                                    poster={preview.thumbnail}
+                                                >
+                                                    <source src={preview.url} type="video/mp4" />
+                                                    Your browser does not support the video tag.
+                                                </video>
+                                                {preview.platform === 'snapchat' && preview.title && (
+                                                    <div className="mt-3">
+                                                        <h5>{preview.title}</h5>
+                                                    </div>
                                                 )}
                                             </div>
-                                        ) : preview.type === 'carousel' ? (
+                                        )}
+
+                                        {preview.type === 'carousel' && (
                                             <div className="carousel-preview p-3 bg-light rounded">
                                                 <FaInstagram className="text-primary" style={{ fontSize: '3rem' }} />
                                                 <p className="mt-2 mb-0">Multiple media files</p>
                                             </div>
-                                        ) : preview.type === 'image' ? (
+                                        )}
+
+                                        {preview.type === 'image' && (
                                             <img
-                                                src={preview.originalUrl}
+                                                src={preview.url}
                                                 alt="Preview"
                                                 className="img-fluid rounded"
                                                 style={{ maxHeight: '400px', width: '100%', objectFit: 'cover' }}
                                                 width={400}
                                                 height={300}
                                             />
-                                        ) : null}
+                                        )}
                                     </div>
 
-                                    {/* यूट्यूब के लिए टेबल */}
                                     {platform === 'youtube' && preview && (
                                         <div className="mt-4">
                                             <h3 className="h5">Video Quality Options</h3>
@@ -279,9 +326,14 @@ const MediaDownload = () => {
                                                             <td>
                                                                 <button
                                                                     className="btn btn-sm btn-primary"
-                                                                    onClick={() => downloadMedia(item.url, item.mimeType)}
+                                                                    onClick={() => downloadMedia(item.url, item.mimeType, index)}
+                                                                    disabled={downloadingIndex === index || isLoading}
                                                                 >
-                                                                    Download
+                                                                    {downloadingIndex === index ? (
+                                                                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    ) : (
+                                                                        'Download'
+                                                                    )}
                                                                 </button>
                                                             </td>
                                                         </tr>
@@ -291,10 +343,10 @@ const MediaDownload = () => {
                                         </div>
                                     )}
 
-                                    {platform === 'instagram' && (
+                                    {(platform === 'instagram' || platform === 'snapchat') && (
                                         <div className="mt-3">
                                             <button
-                                                className={`btn btn-lg ${platform === 'instagram' ? 'btn-primary' : 'btn-danger'}`}
+                                                className={`btn btn-lg ${getPlatformColor()}`}
                                                 onClick={handlePreviewDownload}
                                             >
                                                 <FaDownload className="me-2" />
@@ -304,7 +356,6 @@ const MediaDownload = () => {
                                     )}
                                 </div>
                             )}
-
                             {/* How to use section */}
                             <div className="card bg-light border-0 mt-4">
                                 <div className="card-body">
